@@ -5,4 +5,5 @@ target
 .settings
 .worksheet
 .idea
+*.swp
 
