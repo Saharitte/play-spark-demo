@@ -10,6 +10,6 @@ val webapp = project.dependsOn(shared).enablePlugins(PlayScala)
 
 val driver = project.dependsOn(shared)
 
-val root = project.in(".").aggregate(webapp, driver, shared)
+val root = project.in(file(".")).aggregate(webapp, driver, shared)
 
 
