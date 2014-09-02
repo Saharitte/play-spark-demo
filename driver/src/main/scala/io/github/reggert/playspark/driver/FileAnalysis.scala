@@ -18,15 +18,18 @@ class FileAnalysis(sparkContext : SparkContext, sparkEnv : SparkEnv, files : Seq
 
   import AsyncDoubleRDDFunctions._
 
-  def stats : Future[StatCounter] = {
+  // This should go away once Spark gets rid of the ThreadLocal storage of SparkEnv.
+  private def withSparkEnv[T] (f : => T) : T = {SparkEnv.set(sparkEnv); f}
+
+  def stats : Future[StatCounter] = withSparkEnv {
     val p = Promise[StatCounter]()
     p.completeWith(doubles.asyncStats)
     p.future
   }
 
-  def histogram(bucketCount : Int) : Future[(Array[Double], Array[Long])] = {
+  def histogram(bucketCount : Int) : Future[(Array[Double], Array[Long])] = withSparkEnv {
     val p = Promise[(Array[Double], Array[Long])]
-    p.completeWith(doubles.histogram(bucketCount))
+    p.completeWith(doubles.asyncHistogram(bucketCount))
     p.future
   }
 }
