@@ -9,6 +9,6 @@ object Driver extends App {
   val actorSystem = ActorSystem("PlaySparkDemo")
   val sparkConf = new SparkConf()
   val files = args.toSeq map {new File(_)}
-  val broker = actorSystem.actorOf(Props(new PlaySparkBroker(sparkConf, files)))
+  val broker = actorSystem.actorOf(Props(new PlaySparkBroker(sparkConf, files)), "PlaySparkBroker")
   actorSystem.awaitTermination()
 }
