@@ -35,7 +35,8 @@ class PlaySparkBroker(val sparkConf : SparkConf, dataFiles : Seq[File]) extends 
 
   def idle : Receive = {
     case RequestStats =>
-      analysis.stats map StatsAnalysisComplete pipeTo self
+      import context.dispatcher
+      analysis.stats() map StatsAnalysisComplete pipeTo self
       context become busy(Set(sender))
   }
 

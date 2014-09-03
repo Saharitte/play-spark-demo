@@ -6,7 +6,7 @@ import org.apache.spark.util.StatCounter
 
 import SparkContext._
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 /**
  * Helper class that merges the functionality of [[org.apache.spark.rdd.DoubleRDDFunctions]]
@@ -15,32 +15,18 @@ import scala.concurrent.{Future, Promise}
  * @param self the RDD to extend with the additional functionality
  */
 final class AsyncDoubleRDDFunctions(val self : RDD[Double]) extends AnyVal {
-
-  private implicit val accumulableStats = new AccumulableParam[StatCounter, Double] {
-    override def addAccumulator(r: StatCounter, t: Double): StatCounter = r.merge(t)
-    override def addInPlace(r1: StatCounter, r2: StatCounter): StatCounter = r1.merge(r2)
-    override def zero(initialValue: StatCounter): StatCounter = initialValue.copy()
-  }
-
-  private final case class MinMax(min : Double, max : Double) {
-    def unbounded = min.isNaN || max.isNaN | min.isInfinity || max.isInfinity
-  }
-
-  private implicit val accumulatorMinMax = new AccumulatorParam[MinMax] {
-    override def addInPlace(r1: MinMax, r2: MinMax): MinMax = MinMax(r1.min.min(r2.min), r1.max.max(r2.max))
-    override def zero(initialValue: MinMax): MinMax = initialValue
-  }
+  import AsyncDoubleRDDFunctions._
 
 
-  def asyncStats : Future[StatCounter] = {
+  def asyncStats()(implicit ctx : ExecutionContext) : Future[StatCounter] = {
     val p = Promise[StatCounter]()
-    val acc = self.sparkContext.accumulable[StatCounter, Double](new StatCounter)
+    val acc = self.sparkContext.accumulable[StatCounter, Double](new StatCounter) (accumulableStats)
     p.completeWith(self foreachAsync {acc += _} map {_ => acc.value})
     p.future
   }
 
 
-  def asyncHistogram(bucketCount: Int): Future[Pair[Array[Double], Array[Long]]] = {
+  def asyncHistogram(bucketCount: Int) (implicit ctx : ExecutionContext) : Future[Pair[Array[Double], Array[Long]]] = {
     // Compute the minimum and the maximum
     val mappedPartitions: RDD[MinMax] = self.mapPartitions { items =>
       Iterator(items.foldRight(Double.NegativeInfinity,
@@ -48,7 +34,7 @@ final class AsyncDoubleRDDFunctions(val self : RDD[Double]) extends AnyVal {
         (x._1.max(e), x._2.min(e))))
     } map {case (max, min) => MinMax(min, max)}
     implicit val acc =
-      self.sparkContext.accumulator(MinMax(Double.PositiveInfinity, Double.NegativeInfinity))
+      self.sparkContext.accumulator(MinMax(Double.PositiveInfinity, Double.NegativeInfinity)) (accumulatorMinMax)
     val minMaxFuture = mappedPartitions foreachAsync {acc ++= _} map {_ => acc.value} map {
       case minMax : MinMax if minMax.unbounded =>
         throw new UnsupportedOperationException(
@@ -69,7 +55,7 @@ final class AsyncDoubleRDDFunctions(val self : RDD[Double]) extends AnyVal {
   }
 
 
-  def asyncHistogram(buckets : Array[Double], evenBuckets : Boolean) : Future[Array[Long]] = {
+  def asyncHistogram(buckets : Array[Double], evenBuckets : Boolean)(implicit ctx : ExecutionContext) : Future[Array[Long]] = {
     if (buckets.length < 2) {
       throw new IllegalArgumentException("buckets array must have at least two elements")
     }
@@ -157,4 +143,19 @@ final class AsyncDoubleRDDFunctions(val self : RDD[Double]) extends AnyVal {
 object AsyncDoubleRDDFunctions {
   implicit def rddToAsyncDoubleRDDFunctions(self : RDD[Double]) : AsyncDoubleRDDFunctions =
     new AsyncDoubleRDDFunctions(self)
+
+  implicit val accumulableStats = new AccumulableParam[StatCounter, Double] {
+    override def addAccumulator(r: StatCounter, t: Double): StatCounter = r.merge(t)
+    override def addInPlace(r1: StatCounter, r2: StatCounter): StatCounter = r1.merge(r2)
+    override def zero(initialValue: StatCounter): StatCounter = initialValue.copy()
+  }
+
+  final case class MinMax(min : Double, max : Double) {
+    def unbounded = min.isNaN || max.isNaN | min.isInfinity || max.isInfinity
+  }
+
+  implicit val accumulatorMinMax = new AccumulatorParam[MinMax] {
+    override def addInPlace(r1: MinMax, r2: MinMax): MinMax = MinMax(r1.min.min(r2.min), r1.max.max(r2.max))
+    override def zero(initialValue: MinMax): MinMax = initialValue
+  }
 }
