@@ -15,7 +15,7 @@ object SparkAnalysis extends Controller {
   import play.api.Play.current
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  val broker = Akka.system.actorSelection("akka.tcp://PlayScalaDemo@127.0.0.1:2552/user/PlaySparkBroker")
+  val broker = Akka.system.actorSelection("akka.tcp://PlaySparkDemo@127.0.0.1:2552/user/PlaySparkBroker")
 
   def statistics = Action.async {
     (broker ? RequestStats).mapTo[Stats] map {stats => Ok(Json.toJson(stats))}
