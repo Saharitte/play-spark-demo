@@ -1,0 +1,1 @@
+name := "play-spark-demo-shared"
