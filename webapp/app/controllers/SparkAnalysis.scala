@@ -1,6 +1,7 @@
 package controllers
 
 import akka.util.Timeout
+import com.typesafe.config.ConfigFactory
 import play.api.libs.concurrent.Akka
 import play.api.libs.json.Json
 import play.api.mvc.{Result, Action, Controller}
@@ -15,7 +16,9 @@ object SparkAnalysis extends Controller {
   import play.api.Play.current
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  val broker = Akka.system.actorSelection("akka.tcp://PlaySparkDemo@127.0.0.1:2552/user/PlaySparkBroker")
+  val config = ConfigFactory.load()
+
+  val broker = Akka.system.actorSelection(config.getString("demo.spark-broker"))
 
   def statistics = Action.async {
     (broker ? RequestStats).mapTo[Stats] map {stats => Ok(Json.toJson(stats))}
